@@ -1,8 +1,9 @@
 #include <array>
+#include <bitset>
 #include <climits>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
-#include <bitset>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -25,9 +26,6 @@ std::unordered_map<std::string, bool> OPT_REQUIRE_ARG = {
 
     { "-c", true },
     { "-cols", true },
-
-    { "-E", false },
-    { "-EBCDIC", false },
 
     { "-g", true },
     { "-groupsize", true },
@@ -91,7 +89,33 @@ std::filesystem::path fsearch(const std::string fname, const std::string dir)
     }
     return dirpath;
 }
+
+bool is_task_decode(const std::string &PATH) 
+{
+    // to see whether the file should be translated from binary to
+    // hex or hex to binary I used the file {filename} linux command
+    // to get file description. If the file is not binary, the output
+    // of the commmand would not constain the word "ASCII"
+    const char ASCII[] = {'A', 'S', 'C', 'I', 'I'};
+    const std::string BASHCMD = "file " + PATH;
+    const std::string OUTPUT = *get_cmd_output(PATH, BASHCMD);
+
+    for (int i = 0, counter = 0; i < OUTPUT.size(); i++) 
+    {
+        if (OUTPUT[i] == ASCII[counter]) 
+        {
+            counter++;
+            if (counter == 5)
+                return false;
+        }
+        else
+            counter = 0;
+    }
+
+    return true;
+}
 */
+
 std::unique_ptr<std::string> get_cmd_output(const std::string &PATH,
                            const std::string &BASHCMD)
 {
@@ -144,102 +168,103 @@ bool validate_opt(const std::string &opt)
     return true;
 }
 
-std::unique_ptr<std::string> parse_cmd(int argc, char **argv)
+std::unique_ptr<std::unordered_map<std::string, int>> handle_opts(const std::vector<std::string> &COMMAND_ARGS, std::vector<int> &opt_arg_values, int optc)
 {
-    std::unique_ptr<std::string> err = std::make_unique<std::string>("IO");
-    std::string parsed_cmd;
-    int count = 0;
+    std::unordered_map<std::string, int> opts_to_args{};
+    for (int i = 0, val_i = 0; i < optc; i++)
+    {
+        std::string opt = COMMAND_ARGS[i];
+        if (OPT_REQUIRE_ARG[opt])
+            opts_to_args[opt] = opt_arg_values[val_i++];
+        else
+            // cannot set to 0 since 0 is produced when opt isn't a
+            // key in the map
+            opts_to_args[opt] = -1;
+    }
+
+    return std::make_unique<std::unordered_map<std::string, int>>(opts_to_args);
+}
+
+std::unique_ptr<std::vector<std::string>> parse_cmd(int argc, char **argv, int &optc, int &filec, std::vector<int> &opt_arg_values)
+{
+    std::unique_ptr<std::vector<std::string>> err = std::make_unique<std::vector<std::string>>();
+    err->push_back("err");
+
+    std::vector<std::string> parsed_cmd{};
+    int parsed_strings = 0;
 
     // options should always come first in command
     while (**(++argv) == '-')
     {
         const std::string opt_type = *argv;
+        optc++;
 
         if (!validate_opt(opt_type))
             return err;
 
         if (OPT_REQUIRE_ARG[opt_type])
         {
-            // using buffer to only write after passing all error checks
             const std::string opt_arg = *(++argv);
-            std::string buffer;
             char sign = opt_arg[0];
+            char cast_val;
             bool is_negative = false;
 
             if (sign == '-')
-            {
-                buffer += sign;
                 is_negative = true;
-            }
 
             // must skip character that holds sign, can take advantage
             // that is_negative can be cast to int and will set start
             // index to one if true (number is negative)
+            short opt_argv = 0;
             for (int i = is_negative; i < opt_arg.size(); i++)
             {
-                char cast_val = opt_arg[i];
+                cast_val = opt_arg[i];
 
                 // 48-57 is the ascii character value of the numbers 0-9
                 if (cast_val < 48 || cast_val > 57)
                     return err;
 
-                buffer += cast_val;
+                // convert from ascii to decimal
+                cast_val -= 48;
+                short converter = std::pow(10, opt_arg.size() - i - 1);
+                opt_argv += (cast_val * converter);
             }
 
-            parsed_cmd += (opt_type + buffer);
-            count += 2;
+            if (is_negative)
+                opt_argv *= -1;
+
+            opt_arg_values.push_back(opt_argv);
+            parsed_cmd.push_back(opt_type);
+            parsed_strings += 2;
         }
         else
         {
-            // error existed where an option that takes no arguments exited loop
-            // early, fixed by peeking at first char of next option and checking
-            // equality to ascii value of '-'
-            if (**(argv + 1) != 45)
-                return err;
-            parsed_cmd += opt_type;
-            count++;
+            parsed_cmd.push_back(opt_type);
+            parsed_strings++;
         }
     }
 
-    // if no file or too many files were provided
-    if (argc == count || argc + 2 < count)
+    // if no file was given or loop exited too early
+    // best way to catch unneeded argument errors is to
+    // let the while loop break and check how many opts and
+    // args were parsed
+    if (argc == parsed_strings || argc > parsed_strings + 2)
         return err;
 
-    for (int i = 0; i < argc - count; i++)
-        parsed_cmd += *(argv++);
-
-    return std::make_unique<std::string>(parsed_cmd);
-}
-
-bool is_task_decode(const std::string &PATH) 
-{
-    // to see whether the file should be translated from binary to
-    // hex or hex to binary I used the file {filename} linux command
-    // to get file description. If the file is not binary, the output
-    // of the commmand would not constain the word "ASCII"
-    const char ASCII[] = {'A', 'S', 'C', 'I', 'I'};
-    const std::string BASHCMD = "file " + PATH;
-    const std::string OUTPUT = *get_cmd_output(PATH, BASHCMD);
-
-    for (int i = 0, counter = 0; i < OUTPUT.size(); i++) 
+    for (int i = 0; i < argc - parsed_strings; i++)
     {
-        if (OUTPUT[i] == ASCII[counter]) 
-        {
-            counter++;
-            if (counter == 5)
-                return false;
-        }
-        else
-            counter = 0;
+        parsed_cmd.push_back(*(argv++));
+        filec++;
     }
 
-    return true;
+    return std::make_unique<std::vector<std::string>>(parsed_cmd);
 }
 
 bool is_vaild_file(std::ifstream &file)
 {
     if (!file.is_open())
     {
+        // ---- Refactor error logging to main function using INPUT_FILE_ERROR ----
         std::cerr << "Unable to open specified file" << '\n';
         file.close();
         return false;
@@ -264,6 +289,8 @@ int encode_file(const std::string &PATH)
         count++;
         std::bitset<8> binary(buffer);
         std::cout << binary << ' ';
+
+        // ---- Change 5 to -c arg ----
         if (count % 5 == 0)
         {
             std::cout << '\n';
@@ -279,7 +306,7 @@ int decode_file(const std::string &PATH)
     // opening in binary mode to not convert any special characters
     // buffer is 16 because standard file offset is 16 bits
     // buffer of type char will cast binary values into ascii values
-    // ---- Change 16 to be argument accepted ----
+    // ---- Change 16 to be -c arg ----
     std::ifstream file(PATH, std::ios::binary);
     char buffer[16];
 
@@ -304,18 +331,27 @@ int decode_file(const std::string &PATH)
 
 int main(int argc, char **argv) 
 {
-    const std::string opt = "12";
-    std::cout << validate_opt(opt);
-    if (argc == 1) 
+    if (argc == 1)
     {
         std::cerr << "No file path specified" << '\n';
         return INVALID_OP;
     }
 
-    std::cout << *parse_cmd(argc - 1, argv);
-    return 0;
+    int optc = 0, filec = 0;
+    std::vector<int> opt_arg_values{};
+    const std::vector<std::string> COMMAND_ARGS = *parse_cmd(argc - 1, argv, optc, filec, opt_arg_values);
+    if (COMMAND_ARGS[0] == "err")
+    {
+        std::cerr << "Invalid command" << '\n';
+        return INVALID_OP;
+    }
+
+    // all command validation done in parse_cmd() function
+    std::unordered_map<std::string, int> opts_with_args = *handle_opts(COMMAND_ARGS, opt_arg_values, optc);
+
     // must cast PATH into std::fs::path to use the exists method
-    const std::string PATH(*(argv + 1));
+
+    const std::string PATH(argv[argc - filec]);
     if (!std::filesystem::exists(static_cast<std::filesystem::path>(PATH))) 
     {
         std::cerr << "No file " << PATH << " in given directory" << '\n';
@@ -323,14 +359,8 @@ int main(int argc, char **argv)
     }
 
     // decode in this context means to turn binary into hex
-    if (is_task_decode(PATH))
-    {
-        if (decode_file(PATH) == INPUT_FILE_ERROR)
-            return INPUT_FILE_ERROR;
-    }
-    else
-        if (encode_file(PATH) == INPUT_FILE_ERROR)
-            return INPUT_FILE_ERROR;
+    if (opts_with_args["-b"] != -1)
+        decode_file(PATH);
 
     return OK;
 }
