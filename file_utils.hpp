@@ -9,6 +9,7 @@
 bool is_file_open(std::ifstream &file);
 int encode_file(const std::string &PATH);
 int decode_file(const std::string &PATH);
-std::unique_ptr<std::string> _convert_bytes_to_hex(char *buffer);
+std::unique_ptr<std::string> _dec_to_hex(int val);
+std::unique_ptr<std::string> _get_decoded_row(char *buffer);
 
 #endif

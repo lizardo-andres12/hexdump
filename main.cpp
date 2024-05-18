@@ -33,8 +33,22 @@ int main(int argc, char **argv)
         return INPUT_FILE_ERROR;
     }
 
-    if (opts_with_args["-b"] != -1)
-        decode_file(CMD_ARGS.input_file);
+    if (opts_with_args["-b"] == -1)
+    {
+        if (encode_file(CMD_ARGS.input_file) == INPUT_FILE_ERROR)
+        {
+            std::cerr << "Unable to open specified file" << '\n';
+            return INPUT_FILE_ERROR;
+        }
+    }
+    else
+    {
+        if (decode_file(CMD_ARGS.input_file) == INPUT_FILE_ERROR)
+        {
+            std::cerr << "Unable to open specified file" << '\n';
+            return INPUT_FILE_ERROR;
+        }
+    }
 
     return OK;
 }

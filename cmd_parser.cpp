@@ -23,7 +23,7 @@ int _string_to_int(const std::string &str)
         is_neg = true;
 
     int intv = 0;
-    for (int i = is_neg; i < str.size(); i++)
+    for (size_t i = is_neg; i < str.size(); i++)
     {
         if (str[i] < 48 || str[i] > 57)
             return MAX_INT;

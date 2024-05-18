@@ -1,18 +1,16 @@
 #include "file_utils.hpp"
 #include "constants.hpp"
 #include "error_codes.h"
-#include <array>
 #include <bitset>
-#include <cstdio>
+#include <iomanip>
 #include <iostream>
+#include <memory>
 
 
-bool is_file_open(std::ifstream &file)
+bool _is_file_open(std::ifstream &file)
 {
     if (!file.is_open())
     {
-        // ---- Refactor error logging to main function using INPUT_FILE_ERROR ----
-        std::cerr << "Unable to open specified file" << '\n';
         file.close();
         return false;
     }
@@ -25,25 +23,35 @@ int encode_file(const std::string &PATH)
     // file opened in both encode and decode functions
     // to guarantee close when variable goes out of scope
     std::ifstream file(PATH);
-    char buffer;
-    char count = 0;
 
-    if (!is_file_open(file))
+    if (!_is_file_open(file))
         return INPUT_FILE_ERROR;
+
+    char buffer;
+    int count = 0;
+    int row = 0;
 
     while (file >> std::noskipws >> buffer)
     {
-        count++;
+        // ---- Change 8 to -c arg ----
+        if (count % 8 == 0 && count != 0)
+            std::cout << '\n';
+
+        if (count % 8 == 0)
+        {
+            std::cout << std::setfill('0') << std::setw(8);
+            std::cout << *_dec_to_hex(row++ * 8) << ": ";
+        }
+
         std::bitset<8> binary(buffer);
         std::cout << binary << ' ';
 
-        // ---- Change 5 to -c arg ----
-        if (count % 5 == 0)
-        {
-            std::cout << '\n';
-        }
+        buffer = 0;
+        std::flush(std::cout);
+        count++;
     }
 
+    std::cout << '\n';
     file.close();
     return OK;
 }
@@ -55,19 +63,22 @@ int decode_file(const std::string &PATH)
     // buffer of type char will cast binary values into ascii values
     // ---- Change 16 to be -c arg ----
     std::ifstream file(PATH, std::ios::binary);
-    char buffer[16];
 
-    if (!is_file_open(file))
+    if (!_is_file_open(file))
         return INPUT_FILE_ERROR;
+
+    char buffer[16];
+    int rows = 0;
 
     while (!file.eof()) 
     {
-        file.read(buffer, 16);
-        std::unique_ptr<std::string> hex = _convert_bytes_to_hex(buffer);
-        std::cout << *hex << '\n';
+        std::cout << std::setfill('0') << std::setw(8);
+        std::cout << *_dec_to_hex(rows++ * 16) << ": ";
 
-        // flush output buffer and zero out
-        // input buffer to avoid overflow
+        file.read(buffer, 16);
+        std::cout << *_get_decoded_row(buffer) << '\n';
+
+        // flush output buffer and zero out input buffer to avoid overflow
         std::flush(std::cout);
         std::fill(buffer, buffer + sizeof(buffer), 0);
     }
@@ -76,12 +87,28 @@ int decode_file(const std::string &PATH)
     return OK;
 }
 
-std::unique_ptr<std::string> _convert_bytes_to_hex(char *buffer)
+std::unique_ptr<std::string> _dec_to_hex(int val)
 {
-    std::string hex;
+    if (val == 0)
+        return std::make_unique<std::string>("0");
+
+    std::string output;
+    while (val > 0)
+    {
+        int hex_val = val & 0xf;
+        output = DEC_TO_HEX[hex_val] + output;
+        val >>= 4;
+    }
+
+    return std::make_unique<std::string>(output);
+}
+
+std::unique_ptr<std::string> _get_decoded_row(char *buffer)
+{
+    std::string output;
 
     // ---- Change 16 to be offset value ----
-    for ( int i = 0; i < 16; i++) 
+    for (int i = 0; i < 16; i++) 
     {
         int byte_val = buffer[i];
 
@@ -91,15 +118,18 @@ std::unique_ptr<std::string> _convert_bytes_to_hex(char *buffer)
         if (byte_val < 0)
             byte_val += 256;
 
-        hex += (DEC_TO_HEX[byte_val / 16] + DEC_TO_HEX[byte_val % 16]);
+        std::string hex = *_dec_to_hex(byte_val);
+        if (hex.size() == 1)
+            hex = '0' + hex;
+
+        output += hex;
 
         // last space is omitted to reduce ascii translation complexity
         // ---- Change 15 to offset value - 1 ----
         if (i % 2 == 1 && i != 15)
-            hex += ' ';
+            output += ' ';
     }
 
     // return the pointer for efficiency when passing to ascii converter
-    std::unique_ptr<std::string> hex_ptr = std::make_unique<std::string>(hex);
-    return hex_ptr;
+    return std::make_unique<std::string>(output);
 }
