@@ -14,6 +14,7 @@ int dump(std::map<std::string, int> opts_with_args, std::ifstream &file, std::os
 int validate_file(const CLA &CMD_ARGS);
 std::unique_ptr<std::string> _dec_to_hex(int val);
 std::unique_ptr<std::string> _get_decoded_row(char *buffer);
+std::unique_ptr<std::string> _get_ascii_conversion(char *buffer);
 void decode_file(std::ifstream &file, std::ostream &output_target);
 void encode_file(std::ifstream &file, std::ostream &output_target);
 
