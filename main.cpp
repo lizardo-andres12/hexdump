@@ -1,6 +1,7 @@
 #include "cmd_parser.hpp"
-#include "file_utils.hpp"
 #include "error_codes.h"
+#include "file_utils.hpp"
+#include <fstream>
 #include <iostream>
 
 
@@ -32,24 +33,30 @@ int main(int argc, char **argv)
         std::cerr << "No file \"" << CMD_ARGS.input_file << "\" exists in directory" << '\n';
         return INPUT_FILE_ERROR;
     }
+    std::ifstream input_file(CMD_ARGS.input_file);
 
-    if (opts_with_args["-b"] == -1)
+    if (CMD_ARGS.output_file.empty())
     {
-        if (encode_file(CMD_ARGS.input_file) == INPUT_FILE_ERROR)
+        if (dump(opts_with_args, input_file, std::cout) == INPUT_FILE_ERROR)
         {
             std::cerr << "Unable to open specified file" << '\n';
+            input_file.close();
             return INPUT_FILE_ERROR;
         }
     }
     else
     {
-        if (decode_file(CMD_ARGS.input_file) == INPUT_FILE_ERROR)
+        std::ofstream output_file(CMD_ARGS.output_file);
+        if (dump(opts_with_args, input_file, output_file) == INPUT_FILE_ERROR)
         {
             std::cerr << "Unable to open specified file" << '\n';
+            input_file.close();
             return INPUT_FILE_ERROR;
         }
+        output_file.close();
     }
 
+    input_file.close();
     return OK;
 }
 

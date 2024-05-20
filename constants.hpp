@@ -4,7 +4,10 @@
 #include <map>
 #include <string>
 
+
 // used for quick conversion from int to string
+const int MAX_INT = 2147483647;
+
 const char DEC_TO_HEX[] = "0123456789abcdef";
 
 const std::map<std::string, bool> OPT_REQUIRE_ARG = {

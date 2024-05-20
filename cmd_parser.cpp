@@ -2,7 +2,6 @@
 #include "constants.hpp"
 #include "error_codes.h"
 #include <cmath>
-#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -32,17 +31,6 @@ int _string_to_int(const std::string &str)
     }
 
     return intv;
-}
-
-int validate_file(const CLA &CMD_ARGS)
-{
-    // input file is guaranteed by parse_cmd()
-    const std::filesystem::path INPUT_PATH(CMD_ARGS.input_file);
-
-    if (!std::filesystem::exists(INPUT_PATH))
-        return INPUT_FILE_ERROR;
-
-    return OK;
 }
 
 std::unique_ptr<std::map<std::string, int>> validate_args(const CLA &CMD_ARGS)

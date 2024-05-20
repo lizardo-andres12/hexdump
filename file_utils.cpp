@@ -2,6 +2,7 @@
 #include "constants.hpp"
 #include "error_codes.h"
 #include <bitset>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -18,72 +19,31 @@ bool _is_file_open(std::ifstream &file)
     return true;
 }
 
-int encode_file(const std::string &PATH)
-{
-    // file opened in both encode and decode functions
-    // to guarantee close when variable goes out of scope
-    std::ifstream file(PATH);
-
-    if (!_is_file_open(file))
-        return INPUT_FILE_ERROR;
-
-    char buffer;
-    int count = 0;
-    int row = 0;
-
-    while (file >> std::noskipws >> buffer)
-    {
-        // ---- Change 8 to -c arg ----
-        if (count % 8 == 0 && count != 0)
-            std::cout << '\n';
-
-        if (count % 8 == 0)
-        {
-            std::cout << std::setfill('0') << std::setw(8);
-            std::cout << *_dec_to_hex(row++ * 8) << ": ";
-        }
-
-        std::bitset<8> binary(buffer);
-        std::cout << binary << ' ';
-
-        buffer = 0;
-        std::flush(std::cout);
-        count++;
-    }
-
-    std::cout << '\n';
-    file.close();
-    return OK;
-}
-
-int decode_file(const std::string &PATH) 
+int dump(std::map<std::string, int> opts_with_args, std::ifstream &file, std::ostream &output_target)
 {
     // opening in binary mode to not convert any special characters
     // buffer is 16 because standard file offset is 16 bits
     // buffer of type char will cast binary values into ascii values
     // ---- Change 16 to be -c arg ----
-    std::ifstream file(PATH, std::ios::binary);
-
     if (!_is_file_open(file))
         return INPUT_FILE_ERROR;
 
-    char buffer[16];
-    int rows = 0;
+    if (opts_with_args["-b"] == -1)
+        encode_file(file, output_target);
+    else
+        decode_file(file, output_target);
 
-    while (!file.eof()) 
-    {
-        std::cout << std::setfill('0') << std::setw(8);
-        std::cout << *_dec_to_hex(rows++ * 16) << ": ";
+    return OK;
+}
 
-        file.read(buffer, 16);
-        std::cout << *_get_decoded_row(buffer) << '\n';
+int validate_file(const CLA &CMD_ARGS)
+{
+    // input file is guaranteed by parse_cmd()
+    const std::filesystem::path INPUT_PATH(CMD_ARGS.input_file);
 
-        // flush output buffer and zero out input buffer to avoid overflow
-        std::flush(std::cout);
-        std::fill(buffer, buffer + sizeof(buffer), 0);
-    }
+    if (!std::filesystem::exists(INPUT_PATH))
+        return INPUT_FILE_ERROR;
 
-    file.close();
     return OK;
 }
 
@@ -132,4 +92,52 @@ std::unique_ptr<std::string> _get_decoded_row(char *buffer)
 
     // return the pointer for efficiency when passing to ascii converter
     return std::make_unique<std::string>(output);
+}
+
+void decode_file(std::ifstream &file, std::ostream &output_target)
+{
+    char buffer[16];
+    int rows = 0;
+
+    while (!file.eof()) 
+    {
+        output_target << std::setfill('0') << std::setw(8);
+        output_target << *_dec_to_hex(rows++ * 16) << ": ";
+
+        file.read(buffer, 16);
+        output_target << *_get_decoded_row(buffer) << '\n';
+
+        // flush output buffer and zero out input buffer to avoid overflow
+        std::flush(output_target);
+        std::fill(buffer, buffer + sizeof(buffer), 0);
+    }
+}
+
+void encode_file(std::ifstream &file, std::ostream &output_target)
+{
+    char buffer;
+    int count = 0;
+    int row = 0;
+
+    while (file >> std::noskipws >> buffer)
+    {
+        // ---- Change 8 to -c arg ----
+        if (count % 8 == 0 && count != 0)
+            output_target << '\n';
+
+        if (count % 8 == 0)
+        {
+            output_target << std::setfill('0') << std::setw(8);
+            output_target << *_dec_to_hex(row++ * 8) << ": ";
+        }
+
+        std::bitset<8> binary(buffer);
+        output_target << binary << ' ';
+
+        buffer = 0;
+        std::flush(output_target);
+        count++;
+    }
+
+    output_target << '\n';
 }
